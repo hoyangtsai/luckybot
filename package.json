@@ -14,7 +14,6 @@
     "eslint-config-prettier": "8.1.0",
     "eslint-plugin-prettier": "3.3.1",
     "file-type": "^16.3.0",
-    "fs-extra": "^9.1.0",
     "gm": "^1.23.1",
     "imgur": "^1.0.0",
     "jest": "26.6.3",
