@@ -10,12 +10,12 @@ module.exports = async function App(context) {
     const buffer = await context.getMessageContent();
     const { ext } = await FileType.fromBuffer(buffer);
 
-    const filename = path.join(__dirname, `tmp-file.${ext}`);
+    const filename = path.join(__dirname, `tmp.${ext}`);
 
     gm(buffer)
       .colorspace('GRAY')
-      // .level('50%', '1', '50%')
-      .threshold('50%')
+      .level('30%', '60%')
+      .threshold('56%')
       // .monochrome()
       .write(filename, function (err) {
         if (!err) {
@@ -35,7 +35,8 @@ module.exports = async function App(context) {
             });
         }
       });
-  } else {
-    await context.sendText(`請傳送一張圖片。`);
   }
+  // else {
+  //   await context.sendText(`請傳送一張圖片。`);
+  // }
 };
