@@ -1,7 +1,8 @@
 const path = require('path');
 const FileType = require('file-type');
-const gm = require('gm').subClass({ imageMagick: true });
 const imgur = require('imgur');
+const fs = require('fs-extra');
+const { execSync } = require('child_process');
 
 imgur.setClientId('7c7c95472cb8e01');
 
@@ -11,29 +12,28 @@ module.exports = async function App(context) {
     const { ext } = await FileType.fromBuffer(buffer);
 
     const filename = path.join(__dirname, `tmp.${ext}`);
+    await fs.writeFileSync(filename, buffer);
 
-    gm(buffer)
-      .colorspace('GRAY')
-      .level('30%', '60%')
-      .threshold('56%')
-      // .monochrome()
-      .write(filename, function (err) {
-        if (!err) {
-          console.log('done');
-          imgur
-            .uploadFile(filename)
-            .then(async (json) => {
-              // console.log('json =>', json);
-              const { link } = json;
-              await context.sendImage({
-                originalContentUrl: link,
-                previewImageUrl: link,
-              });
-            })
-            .catch((err) => {
-              console.error(err.message);
-            });
-        }
+    const convertFile = path.basename(filename, `.${ext}`) + `_mor.${ext}`;
+    await execSync(
+      `convert ${filename} -morphology Edge Octagon -negate -threshold 80% ${convertFile}`,
+      {
+        cwd: __dirname,
+      }
+    );
+
+    imgur
+      .uploadFile(path.join(__dirname, convertFile))
+      .then(async (json) => {
+        // console.log('json =>', json);
+        const { link } = json;
+        await context.sendImage({
+          originalContentUrl: link,
+          previewImageUrl: link,
+        });
+      })
+      .catch((err) => {
+        console.error(err.message);
       });
   }
   // else {
