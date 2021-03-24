@@ -3,6 +3,7 @@ const FileType = require('file-type');
 const imgur = require('imgur');
 const fs = require('fs-extra');
 const { execSync } = require('child_process');
+const hasha = require('hasha');
 
 imgur.setClientId('7c7c95472cb8e01');
 
@@ -11,11 +12,18 @@ module.exports = async function App(context) {
     const buffer = await context.getMessageContent();
     const { ext } = await FileType.fromBuffer(buffer);
 
-    const filename = path.join(__dirname, `tmp.${ext}`);
-    await fs.writeFileSync(filename, buffer);
+    const md5 = await hasha(buffer, { algorithm: 'md5' });
 
-    const convertFile = path.basename(filename, `.${ext}`) + `_mor.${ext}`;
-    await execSync(
+    const filename = `${md5}.${ext}`;
+    const filepath = path.join(__dirname, `${filename}`);
+
+    // if (fs.existsSync(filepath)) {
+    //   await context.sendText(`圖片已傳過 🧐`);
+    // } else {
+    fs.writeFileSync(filepath, buffer);
+
+    const convertFile = path.basename(filepath, `.${ext}`) + `_conv.${ext}`;
+    execSync(
       `convert ${filename} -morphology Edge Octagon -negate -threshold 80% ${convertFile}`,
       {
         cwd: __dirname,
@@ -33,8 +41,9 @@ module.exports = async function App(context) {
         });
       })
       .catch((err) => {
-        console.error(err.message);
+        console.error('imgur:', err.message);
       });
+    // }
   }
   // else {
   //   await context.sendText(`請傳送一張圖片。`);
