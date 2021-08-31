@@ -9,6 +9,8 @@ const { BlobServiceClient } = require('@azure/storage-blob');
 const root = path.resolve(__dirname, '../..');
 const convertPath = path.join(root, 'converts');
 
+const { NODE_ENV, npm_package_name } = process.env;
+
 module.exports = async function (context) {
   // console.log('message:\n\t', context.event.text);
 
@@ -24,7 +26,11 @@ module.exports = async function (context) {
   const fullDate = `${yyyy}/${mm}/${dd}`;
 
   const AZURE_STORAGE_CONNECTION_STRING =
-    process.env.AZURE_STORAGE_CONNECTION_STRING || '';
+    process.env.AZURE_STORAGE_CONNECTION_STRING;
+
+  if (!AZURE_STORAGE_CONNECTION_STRING) {
+    return;
+  }
 
   const blobServiceClient = BlobServiceClient.fromConnectionString(
     AZURE_STORAGE_CONNECTION_STRING
@@ -33,7 +39,7 @@ module.exports = async function (context) {
   // Create a unique name for the container
   let containerName = 'unknown';
   if (userId) {
-    containerName = `line-${userId}`.toLowerCase();
+    containerName = `line`;
   }
 
   console.log('\nCreating container...');
@@ -66,7 +72,7 @@ module.exports = async function (context) {
 
   let uploadCounter = 1;
   for await (const blob of containerClient.listBlobsFlat({
-    prefix: `${fullDate.replace(/\//g, '-')}`,
+    prefix: `${userId}/${fullDate.replace(/\//g, '-')}`,
   })) {
     console.log(`Blob: ${blob.name}`);
     if (blob.name.includes('_conv')) {
@@ -81,7 +87,7 @@ module.exports = async function (context) {
     const md5 = await hasha(buffer, { algorithm: 'md5' });
 
     const origBlobClient = containerClient.getBlockBlobClient(
-      `${fullDate.replace(/\//g, '-')}/${md5}.${ext}`
+      `${userId}/${fullDate.replace(/\//g, '-')}/${md5}.${ext}`
     );
     // async upload original file
     const uploadOrigBlobResponse = origBlobClient.upload(
@@ -97,43 +103,52 @@ module.exports = async function (context) {
     const tempFile = path.join(convertPath, `temp.${ext}`);
     fs.outputFileSync(tempFile, buffer);
 
-    const imageBanner = `${fullDate} ${time} ${displayName} 傳送 ${uploadCounter} 張照片`;
+    const imageBanner = `${fullDate} ${time} ${displayName} 傳給 ${npm_package_name} 第${uploadCounter}張`;
 
     console.log(`imageBanner:\n\t${imageBanner}`);
 
     const convertFile = `${md5}_conv.${ext}`;
-    execSync(
-      `convert ${tempFile} -morphology Edge Octagon -negate -threshold 80% -font "./fonts/NotoSansTC-Regular.otf" -annotate +10+20 "${imageBanner}" ${convertFile}`,
+    const fontPath =
+      NODE_ENV === 'production'
+        ? '/app/.fonts/fonts/NotoSansTC-Regular.otf'
+        : '/Users/thoyang/Library/Fonts/NotoSansTC-Regular.otf';
+    const stdout = execSync(
+      `convert ${tempFile} -morphology Edge Octagon -negate -threshold 80% -font "${fontPath}" -annotate +10+20 "${imageBanner}" ${convertFile}`,
       {
         cwd: convertPath,
       }
     );
 
-    const convFilePath = path.join(convertPath, `${convertFile}`);
-    const convFileContent = fs.readFileSync(convFilePath);
-    const convFileStat = fs.statSync(convFilePath);
+    // convert without error messages
+    if (stdout.toString() === '') {
+      const convFilePath = path.join(convertPath, `${convertFile}`);
+      const convFileContent = fs.readFileSync(convFilePath);
+      const convFileStat = fs.statSync(convFilePath);
 
-    const convBlobClient = containerClient.getBlockBlobClient(
-      `${fullDate.replace(/\//g, '-')}/${convertFile}`
-    );
-    const uploadConvBlobResponse = await convBlobClient.upload(
-      convFileContent,
-      convFileStat.size
-    );
+      const convBlobClient = containerClient.getBlockBlobClient(
+        `${userId}/${fullDate.replace(/\//g, '-')}/${convertFile}`
+      );
+      const uploadConvBlobResponse = await convBlobClient.upload(
+        convFileContent,
+        convFileStat.size
+      );
 
-    if (uploadConvBlobResponse && uploadConvBlobResponse.requestId) {
-      console.log(`Convert blob uploaded successfully. 
+      if (uploadConvBlobResponse && uploadConvBlobResponse.requestId) {
+        console.log(`Convert blob uploaded successfully. 
         responseId: ${uploadConvBlobResponse.requestId}`);
 
-      const convBlobUrl = convBlobClient.url;
-      await context.sendImage({
-        originalContentUrl: convBlobUrl,
-        previewImageUrl: convBlobUrl,
-      });
+        const convBlobUrl = convBlobClient.url;
+        await context.sendImage({
+          originalContentUrl: convBlobUrl,
+          previewImageUrl: convBlobUrl,
+        });
 
-      fs.remove(convFilePath);
+        fs.remove(convFilePath);
+      }
+    } else {
+      await context.sendText(`Convert error: ${stdout.toString()}`);
     }
   } else {
-    await context.sendText(`請傳送一張圖片。`);
+    await context.sendText(`請傳送一張圖片`);
   }
 };

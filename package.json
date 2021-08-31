@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "bottender dev",
+    "dev": "bottender dev --NODE_ENV development",
     "lint": "eslint . ",
-    "start": "bottender start",
+    "start": "bottender start --NODE_ENV production",
     "test": "jest"
   },
   "dependencies": {
