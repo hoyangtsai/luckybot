@@ -22,6 +22,7 @@
     "prettier": "2.2.1"
   },
   "resolutions": {
-    "**/got": ">=11.8.5"
+    "**/got": ">=11.8.5",
+    "**/cacheable-request": ">=10.2.7"
   }
 }
